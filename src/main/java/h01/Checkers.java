@@ -1,6 +1,8 @@
 package h01;
 
+import fopbot.Direction;
 import fopbot.Robot;
+import fopbot.RobotFamily;
 import fopbot.World;
 
 import java.util.Random;
@@ -91,35 +93,146 @@ public class Checkers {
      * Runs the initialization of the white stone.
      */
     public void initWhiteStone() {
-        crash(); // TODO: H1.1 - remove if implemented
+        whiteStone = createStone(RobotFamily.SQUARE_WHITE);
     }
+
+    private Robot createStone(RobotFamily family) {
+        int x, y;
+        do {
+            x = getRandom().nextInt(NUMBER_OF_COLUMNS);
+            y = getRandom().nextInt(NUMBER_OF_ROWS);
+        } while ((x + y) % 2 == 0 || (family == RobotFamily.SQUARE_BLACK && x == whiteStone.getX() && y == whiteStone.getY()));
+        Direction direction = Direction.values()[getRandom().nextInt(4)];
+        int coins = family == RobotFamily.SQUARE_BLACK ? getRandom().nextInt(MIN_NUMBER_OF_COINS, MAX_NUMBER_OF_COINS + 1) : 0;
+        return new Robot(x, y, direction, coins, family);
+    }
+
+    private boolean isPositionInWorld(int x, int y) {
+        return 0 <= x && x < NUMBER_OF_COLUMNS && 0 <= y && y < NUMBER_OF_ROWS;
+    }
+
 
     /**
      * Runs the initialization of all black stones.
      */
     public void initBlackStones() {
-        crash(); // TODO: H1.2 - remove if implemented
+        blackStone0 = createStone(RobotFamily.SQUARE_BLACK);
+        blackStone1 = createStone(RobotFamily.SQUARE_BLACK);
+        blackStone2 = createStone(RobotFamily.SQUARE_BLACK);
+        blackStone3 = createStone(RobotFamily.SQUARE_BLACK);
+        blackStone4 = createStone(RobotFamily.SQUARE_BLACK);
     }
 
     /**
      * Runs the action of the black team.
      */
     public void doBlackTeamActions() {
-        crash(); // TODO: H2.1 - remove if implemented
+        Robot selectedRobot = null;
+        while (selectedRobot == null || !selectedRobot.hasAnyCoins() || selectedRobot.isTurnedOff()) {
+            int selectedNumber = ThreadLocalRandom.current().nextInt(5);
+            selectedRobot = getBlackStone(selectedNumber);
+        }
+        selectedRobot.putCoin();
+        int n;
+        for (n = 0; n < 4; n++) {
+            int nextX = selectedRobot.getX() + nextDeltaX(4 + n - selectedRobot.getDirection().ordinal());
+            int nextY = selectedRobot.getY() + nextDeltaY(4 + n - selectedRobot.getDirection().ordinal());
+            if (!isWhiteStonePosition(nextX, nextY) && isPositionInWorld(nextX, nextY)) {
+                break;
+            }
+        }
+        if (n == 0) {
+            selectedRobot.move();
+            selectedRobot.turnLeft();
+            selectedRobot.turnLeft();
+            selectedRobot.turnLeft();
+            selectedRobot.move();
+        } else if (n == 1) {
+            selectedRobot.move();
+            selectedRobot.turnLeft();
+            selectedRobot.move();
+        } else if (n == 2) {
+            selectedRobot.turnLeft();
+            selectedRobot.move();
+            selectedRobot.turnLeft();
+            selectedRobot.move();
+        } else if (n == 3) {
+            selectedRobot.turnLeft();
+            selectedRobot.turnLeft();
+            selectedRobot.move();
+            selectedRobot.turnLeft();
+            selectedRobot.move();
+        }
     }
+
+    private int nextDeltaX(int n) {
+        n = n % 4;
+        return n == 1 || n == 2 ? -1 : 1;
+    }
+
+    private int nextDeltaY(int n) {
+        n = n % 4;
+        return n == 2 || n == 3 ? -1 : 1;
+    }
+
+
+
 
     /**
      * Runs the action of the white team.
      */
     public void doWhiteTeamActions() {
-        crash(); // TODO: H2.2 - remove if implemented
+        int x = whiteStone.getX();
+        int y = whiteStone.getY();
+        Robot blackStone = null;
+        int xD = 0;
+        int yD = 0;
+        for (int i = 0; i < 4 && blackStone == null; i++) {
+            xD = i == 0 || i == 1 ? 1 : -1;
+            yD = i == 0 || i == 3 ? 1 : -1;
+            int xN = x + xD;
+            int yN = y + yD;
+            while (xN + xD >= 0 && xN + xD < NUMBER_OF_COLUMNS && yN + yD >= 0 && yN + yD < NUMBER_OF_ROWS) {
+                blackStone = getBlackStone(xN, yN);
+                if (blackStone != null) {
+                    if (getBlackStone(xN + xD, yN + yD) != null) {
+                        blackStone = null;
+                    }
+                    break;
+                }
+                xN += xD;
+                yN += yD;
+            }
+        }
+        if (blackStone != null) {
+            whiteStone.setX(blackStone.getX() + xD);
+            whiteStone.setY(blackStone.getY() + yD);
+            blackStone.turnOff();
+        }
+
     }
 
     /**
      * Checks if a team has won the game and, if so, updates the game state to {@link GameState#BLACK_WIN} or {@link GameState#WHITE_WIN}.
      */
     public void updateGameState() {
-        crash(); // TODO: H2.3 - remove if implemented
+        boolean whiteCanWin = true, blackCanWin = true;
+        for (int i = 0; i < 5 && (whiteCanWin || blackCanWin); i++) {
+            Robot blackRobot = getBlackStone(i);
+            if (blackRobot.isTurnedOn()) {
+                whiteCanWin = false;
+            }
+            if (blackRobot.isTurnedOn() && blackRobot.hasAnyCoins()) {
+                blackCanWin = false;
+            }
+            if (i == 4) {
+                if (whiteCanWin) {
+                    gameState = GameState.WHITE_WIN;
+                } else if (blackCanWin) {
+                    gameState = GameState.BLACK_WIN;
+                }
+            }
+        }
     }
 
     /**
@@ -130,4 +243,33 @@ public class Checkers {
     private Random getRandom() {
         return ThreadLocalRandom.current();
     }
+
+    private boolean isWhiteStonePosition(int x, int y) {
+        return whiteStone.getX() == x && whiteStone.getY() == y;
+    }
+
+    private Robot getBlackStone(int number) {
+        return switch (number) {
+            case 0 -> blackStone0;
+            case 1 -> blackStone1;
+            case 2 -> blackStone2;
+            case 3 -> blackStone3;
+            case 4 -> blackStone4;
+            default -> null;
+        };
+    }
+
+    private Robot getBlackStone(int x, int y) {
+        for (int i = 0; i < 5; i++) {
+            Robot blackStone = getBlackStone(i);
+            if (blackStone.isTurnedOn() && blackStone.getX() == x && blackStone.getY() == y) {
+                return blackStone;
+            }
+        }
+        return null;
+    }
+
+
 }
+
+
